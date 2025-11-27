@@ -3,6 +3,8 @@
 
 #include "AIS_Cloud.hxx"
 #include <Standard_Type.hxx>
+#include <Bnd_Box.hxx>
+#include <NCollection_List.hxx>
 #include <algorithm>
 #include <unordered_set>
 #include <cmath>
@@ -22,19 +24,11 @@ static const Bnd_Box& TL_Box(const ColumnTile& n)
 
 // 2) 是否叶子：目前是平铺 tiles，就直接返回 true；
 // 如果以后支持树结构，再改成 !n.Children.empty()
-static bool TL_IsLeaf(const ColumnTile& /*n*/)
+static bool TL_IsLeaf(const ColumnTile& n)
 {
-	return true;
+	return n.Children.empty();
 }
 
-// 3) 子节点列表：目前没有层次结构，返回空
-static const std::vector<ColumnTile*>& TL_Children(const ColumnTile& /*n*/)
-{
-	static const std::vector<ColumnTile*> kEmpty;
-	return kEmpty;
-}
-
-// ----- AIS_Cloud 侧的最小适配 -----
 static std::vector<ColumnTile*> Cloud_GetRoots(const Handle(AIS_Cloud)& cloud)
 {
 	std::vector<ColumnTile*> roots;
@@ -43,9 +37,11 @@ static std::vector<ColumnTile*> Cloud_GetRoots(const Handle(AIS_Cloud)& cloud)
 
 	auto& tiles = cloud->Tiles();
 	roots.reserve(tiles.size());
-	for (ColumnTile& t : tiles)
+	for (std::size_t i = 0; i < tiles.size(); ++i)
 	{
-		roots.push_back(&t);
+		auto& t = tiles[i];
+		if (t.Parent < 0)
+			roots.push_back(&t);
 	}
 	return roots;
 }
@@ -213,6 +209,7 @@ void CloudLodController::selectLOD_baseline_()
 	// 为每个 tile 记录一份状态，方便后面用预算统一调节 LOD
 	struct TileState
 	{
+		Handle(AIS_Cloud) cloud;
 		ColumnTile* node = nullptr;
 		double                  pixDiag = 0.0;
 		std::vector<int>        lodCost;   // 每个 LOD 的点数
@@ -246,58 +243,79 @@ void CloudLodController::selectLOD_baseline_()
 		if (ce.cloud.IsNull())
 			continue;
 
+		auto& allTiles = ce.cloud->Tiles();
+
 		for (ColumnTile* root : ce.roots)
 		{
 			if (!root)
 				continue;
 
-			ColumnTile& node = *root;
+			std::vector<ColumnTile*> stack;
+			stack.push_back(root);
 
-			// 1.1 太小的 tile 直接丢掉（pixDiagHide）
-			const Bnd_Box& box = TL_Box(node);
-			const double pd = LeafProjector::PixelDiag(m_view, box, 0);
-			if (pd <= m_th.pixDiagHide)
-				continue;
-
-			std::vector<RepLevel> reps = TL_Reps(node);
-			if (reps.empty())
-				continue;
-
-			TileState st;
-			st.node = &node;
-			st.pixDiag = pd;
-			st.maxIdx = (int)reps.size() - 1;
-			st.lodCost.resize(reps.size());
-			for (std::size_t i = 0; i < reps.size(); ++i)
+			while (!stack.empty())
 			{
-				st.lodCost[i] = reps[i].pointCount;
+				ColumnTile* node = stack.back();
+				stack.pop_back();
+				if (!node)
+					continue;
+
+				//	太小的 tile 直接丢掉（pixDiagHide）
+				const Bnd_Box& box = TL_Box(*node);
+				const double pd = LeafProjector::PixelDiag(m_view, box, 0);
+				if (pd <= m_th.pixDiagHide)
+					continue;
+
+				if (!TL_IsLeaf(*node))
+				{
+					for (int childIdx : node->Children)
+					{
+						if (childIdx < 0 || childIdx >= allTiles.size())
+							continue;
+						stack.push_back(&allTiles[childIdx]);
+					}
+					continue;
+				}
+
+				std::vector<RepLevel> reps = TL_Reps(*node);
+				if (reps.empty())
+					continue;
+
+				TileState st;
+				st.cloud = ce.cloud;
+				st.node = node;
+				st.pixDiag = pd;
+				st.maxIdx = (int)reps.size() - 1;
+				st.lodCost.resize(reps.size());
+				for (std::size_t i = 0; i < reps.size(); ++i)
+				{
+					st.lodCost[i] = reps[i].pointCount;
+				}
+
+				// 1.2 取上一帧 LOD 作为 hysteresis 的参考
+				int lastIdx = node->CurrentLOD;
+				if (lastIdx < 0 || lastIdx > st.maxIdx)
+					lastIdx = -1;
+
+				int repIdx = 0;
+
+				if (disableLOD || reps.size() == 1)
+				{
+					// 小点云或只有一个 LOD：一律用最细（0）
+					repIdx = 0;
+				}
+				else
+				{
+					repIdx = chooseRepIdx_(*node, pd, m_th, lastIdx);
+					if (repIdx < 0)            repIdx = 0;
+					if (repIdx > st.maxIdx)    repIdx = st.maxIdx;
+				}
+
+				st.desiredIdx = repIdx;
+				st.currentIdx = repIdx;
+
+				tiles.push_back(std::move(st));
 			}
-
-			// 1.2 取上一帧 LOD 作为 hysteresis 的参考
-			int lastIdx = node.CurrentLOD;
-			if (lastIdx < 0 || lastIdx > st.maxIdx)
-				lastIdx = -1;
-
-			int repIdx = 0;
-
-			if (disableLOD || reps.size() == 1)
-			{
-				// 小点云或只有一个 LOD：一律用最细（0）
-				repIdx = 0;
-			}
-			else
-			{
-				// 这里对应你现在 4 参数版本的 chooseRepIdx_
-				// 如果你本地是 3 参数版本，把 lastIdx 去掉即可
-				repIdx = chooseRepIdx_(node, pd, m_th, lastIdx);
-				if (repIdx < 0)            repIdx = 0;
-				if (repIdx > st.maxIdx)    repIdx = st.maxIdx;
-			}
-
-			st.desiredIdx = repIdx;
-			st.currentIdx = repIdx;
-
-			tiles.push_back(std::move(st));
 		}
 	}
 
@@ -382,7 +400,7 @@ void CloudLodController::selectLOD_baseline_()
 	// -------------------------
 	for (const TileState& st : tiles)
 	{
-		m_activeNow.push_back(NodeRep{ st.node, st.currentIdx });
+		m_activeNow.push_back(NodeRep{ st.cloud, st.node, st.currentIdx });
 		m_rt.pointsChosen += st.lodCost[st.currentIdx];
 		++m_rt.nodesShown;
 	}
@@ -405,8 +423,10 @@ bool CloudLodController::applyDiff_()
 		};
 
 	auto makeKey = [](const NodeRep& nr)->std::uintptr_t {
-		return (std::uintptr_t)nr.node
-			^ (std::uintptr_t)(nr.repIdx * 0x9e3779b97f4a7c15ull);
+		const auto nodeKey = reinterpret_cast<std::uintptr_t>(nr.node);
+		const auto repKey = static_cast<std::uintptr_t>(nr.repIdx * 0x9e3779b97f4a7c15ull);
+		const auto cloudKey = reinterpret_cast<std::uintptr_t>(nr.cloud.get());
+		return nodeKey ^ repKey ^ (cloudKey << 1);
 		};
 
 	std::unordered_set<std::uintptr_t> lastSet;
@@ -420,12 +440,10 @@ bool CloudLodController::applyDiff_()
 	// 1) 隐藏 last - now
 	for (const NodeRep& nr : m_activeLast) {
 		if (nowSet.find(makeKey(nr)) == nowSet.end()) {
-			for (auto& ce : m_clouds) {
-				if (!ce.cloud.IsNull()) {
-					Cloud_HideNodeRep(ce.cloud, *nr.node, nr.repIdx);
-					markDirty(ce.cloud);
-					anyChanged = true;
-				}
+			if (!nr.cloud.IsNull()) {
+				Cloud_HideNodeRep(nr.cloud, *nr.node, nr.repIdx);
+				markDirty(nr.cloud);
+				anyChanged = true;
 			}
 		}
 	}
@@ -433,13 +451,11 @@ bool CloudLodController::applyDiff_()
 	// 2) 显示 now - last
 	for (const NodeRep& nr : m_activeNow) {
 		if (lastSet.find(makeKey(nr)) == lastSet.end()) {
-			for (auto& ce : m_clouds) {
-				if (!ce.cloud.IsNull()) {
-					Cloud_BuildRepIfMissing(ce.cloud, *nr.node, nr.repIdx);
-					Cloud_ShowNodeRep(ce.cloud, *nr.node, nr.repIdx);
-					markDirty(ce.cloud);
-					anyChanged = true;
-				}
+			if (!nr.cloud.IsNull()) {
+				Cloud_BuildRepIfMissing(nr.cloud, *nr.node, nr.repIdx);
+				Cloud_ShowNodeRep(nr.cloud, *nr.node, nr.repIdx);
+				markDirty(nr.cloud);
+				anyChanged = true;
 			}
 		}
 	}
@@ -469,5 +485,4 @@ void CloudLodController::UpdateDisplayedStats()
 
 	m_hudStats.displayedTiles = totalTiles;
 	m_hudStats.displayedPoints = totalPoints;
-
 }
