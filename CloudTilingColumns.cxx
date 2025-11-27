@@ -3,7 +3,7 @@
 #include <algorithm>
 
 namespace {
-	// ´Ó Position ÁĞºÍË÷Òı¼¯ºÏ¼ÆËã BBox
+	// ä» Position åˆ—å’Œç´¢å¼•é›†åˆè®¡ç®— BBox
 	static Bnd_Box ComputeBBoxColumn(
 		const Column3f& pos,
 		const std::vector<int>& idx)
@@ -23,7 +23,7 @@ namespace {
 			int gi = id;
 			if (!dense)
 			{
-				// Ï¡Êè£ºIndices Ö¸ÏòÈ«¾ÖË÷Òı
+				// ç¨€ç–ï¼šIndices æŒ‡å‘å…¨å±€ç´¢å¼•
 				if (!pos.Indices) continue;
 				if (id < 0 || (std::size_t)id >= pos.Count) continue;
 				gi = pos.Indices[id];
@@ -37,7 +37,7 @@ namespace {
 		return box;
 	}
 
-	// octree °Ë²æ»®·Ö£ºÖ»¿´ Position ÁĞ
+	// octree å…«å‰åˆ’åˆ†ï¼šåªçœ‹ Position åˆ—
 	static void Partition8Column(
 		const Column3f& pos,
 		const std::vector<int>& inIdx,
@@ -66,7 +66,7 @@ namespace {
 		}
 	}
 
-	// KD ·Ö¸î£º°´Ä³Ò»ÖáµÄ×ø±ê×öÖĞÎ»Êı
+	// KD åˆ†å‰²ï¼šæŒ‰æŸä¸€è½´çš„åæ ‡åšä¸­ä½æ•°
 	static void PartitionMedianAxisColumn(
 		const Column3f& pos,
 		std::vector<int>& inOutIdx,
@@ -94,7 +94,7 @@ namespace {
 		rightIdx.assign(inOutIdx.begin() + mid, inOutIdx.end());
 	}
 
-	// Ñ¡Ôñ×î³¤Öá
+	// é€‰æ‹©æœ€é•¿è½´
 	static int LongestAxis(const Bnd_Box& box)
 	{
 		Standard_Real xmin, ymin, zmin, xmax, ymax, zmax;
@@ -107,7 +107,7 @@ namespace {
 		return 2;
 	}
 
-	// ·ÖÁÑÍ£Ö¹Ìõ¼ş
+	// åˆ†è£‚åœæ­¢æ¡ä»¶
 	static bool StopSplit(int numPoints, int depth, const TilingParams& params)
 	{
 		if (numPoints <= params.LeafMaxPoints) return true;
@@ -116,7 +116,7 @@ namespace {
 	}
 } // namespace
 
-void CloudTilingColumns::buildOctreeRecursive(
+int CloudTilingColumns::buildOctreeRecursive(
 	const CloudColumns& columns,
 	const std::vector<int>& inIdx,
 	const Bnd_Box& inBox,
@@ -125,30 +125,30 @@ void CloudTilingColumns::buildOctreeRecursive(
 	std::vector<ColumnTile>& outTiles)
 {
 	const Column3f& pos = columns.Position;
-	if (!pos.IsValid() || inIdx.empty()) return;
+	if (!pos.IsValid() || inIdx.empty()) return -1;
 
 	if (StopSplit((int)inIdx.size(), depth, params))
 	{
-		// Ò¶×Ó½Úµã -> ColumnTile
+		// å¶å­èŠ‚ç‚¹ -> ColumnTile
 		ColumnTile tile;
 		tile.Depth = depth;
 		tile.Indices = inIdx;
 		tile.BBox = inBox.IsVoid() ? ComputeBBoxColumn(pos, inIdx) : inBox;
 
-		// ¹¹½¨ LOD Level 0
+		// æ„å»º LOD Level 0
 		TileLODLevel lvl0;
 		lvl0.Level = 0;
 		lvl0.PointCount = tile.Indices.size();
 
-		// Position LOD0£ºÖ¸ÏòÈ«¾Ö SoA + ±¾ Tile µÄË÷Òı
+		// Position LOD0ï¼šæŒ‡å‘å…¨å±€ SoA + æœ¬ Tile çš„ç´¢å¼•
 		lvl0.Position.Semantic = AttrSemantic::Position;
 		lvl0.Position.X = pos.X;
 		lvl0.Position.Y = pos.Y;
 		lvl0.Position.Z = pos.Z;
 		lvl0.Position.Indices = nullptr;
-		lvl0.Position.Count = pos.Count;   // È«¾ÖµãÊı
+		lvl0.Position.Count = pos.Count;   // å…¨å±€ç‚¹æ•°
 
-		// Normal LOD0£¨Èç¹ûÓĞ£©
+		// Normal LOD0ï¼ˆå¦‚æœæœ‰ï¼‰
 		if (columns.HasNormal && columns.Normal.IsValid())
 		{
 			lvl0.Normal.Semantic = AttrSemantic::Normal;
@@ -169,11 +169,12 @@ void CloudTilingColumns::buildOctreeRecursive(
 		//		lvl0.print();
 
 		tile.LODs.push_back(lvl0);
+		const int idx = (int)outTiles.size();
 		outTiles.push_back(std::move(tile));
-		return;
+		return idx;
 	}
 
-	// ·ÇÒ¶×Ó½Úµã£º¼ÌĞø·ÖÁÑ
+	// éå¶å­èŠ‚ç‚¹ï¼šç»§ç»­åˆ†è£‚
 	Bnd_Box box = inBox.IsVoid() ? ComputeBBoxColumn(pos, inIdx) : inBox;
 
 	std::vector<int> childIdx[8];
@@ -182,13 +183,26 @@ void CloudTilingColumns::buildOctreeRecursive(
 
 	Partition8Column(pos, inIdx, box, childIdx);
 
+	ColumnTile node;
+	node.Depth = depth;
+	node.BBox = box;
+
+	const int nodeIndex = (int)outTiles.size();
+	outTiles.push_back(std::move(node));
+
 	for (int i = 0; i < 8; ++i)
 	{
 		if (childIdx[i].empty()) continue;
 		Bnd_Box cbox = ComputeBBoxColumn(pos, childIdx[i]);
-		buildOctreeRecursive(columns, childIdx[i], cbox,
+		const int childIndex = buildOctreeRecursive(columns, childIdx[i], cbox,
 			depth + 1, params, outTiles);
+		if (childIndex < 0)
+			continue;
+		outTiles[nodeIndex].Parent = nodeIndex;
+		outTiles[nodeIndex].Children.push_back(childIndex);
 	}
+
+	return nodeIndex;
 }
 
 void CloudTilingColumns::BuildOctree(
