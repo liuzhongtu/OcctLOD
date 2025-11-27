@@ -6,10 +6,10 @@
 #include <SelectMgr_Selection.hxx>
 #include <BRep_Builder.hxx>
 #include <V3d_View.hxx>
-#include "lod\ColumnTileLOD.hxx"
+#include "ColumnTileLOD.hxx"
 
 static const std::vector<Quantity_Color> s_colorList = {
-	Quantity_Color(240 / 255.0, 200 / 255.0, 0 / 255.0, Quantity_TOC_sRGB),	// Ä¬ÈÏÑÕÉ«
+	Quantity_Color(240 / 255.0, 200 / 255.0, 0 / 255.0, Quantity_TOC_sRGB),	// é»˜è®¤é¢œè‰²
 	Quantity_Color(126 / 255.0,  240 / 255.0, 191 / 255.0, Quantity_TOC_sRGB),	//
 	Quantity_Color(255 / 255.0, 219 / 255.0, 177 / 255.0, Quantity_TOC_sRGB),	//
 	Quantity_Color(157 / 255.0, 157 / 255.0, 255 / 255.0, Quantity_TOC_sRGB),	//
@@ -18,8 +18,8 @@ static const std::vector<Quantity_Color> s_colorList = {
 	Quantity_Color(201 / 255.0, 151 / 255.0, 255 / 255.0, Quantity_TOC_sRGB),	//
 	Quantity_Color(153 / 255.0, 255 / 255.0, 251 / 255.0, Quantity_TOC_sRGB),	//
 	Quantity_Color(180 / 255.0, 208 / 255.0, 255 / 255.0, Quantity_TOC_sRGB),	//
-};	// ÑÕÉ«ÁĞ±í
-static size_t s_colorIdx = 0;	// ÑÕÉ«Ë÷Òı
+};	// é¢œè‰²åˆ—è¡¨
+static size_t s_colorIdx = 0;	// é¢œè‰²ç´¢å¼•
 
 IMPLEMENT_STANDARD_RTTIEXT(AIS_Cloud, AIS_InteractiveObject)
 
@@ -40,35 +40,35 @@ void AIS_Cloud::SetDataStore(const std::shared_ptr<CloudDataStore>& store)
 		return;
 	}
 
-	// 1) ´Ó CloudDataStore µÄ SoA ¹¹½¨ Column ÊÓÍ¼
+	// 1) ä» CloudDataStore çš„ SoA æ„å»º Column è§†å›¾
 	myColumns = BuildCloudColumns(*m_store);
 
-	// 2) »ùÓÚ Column ×ö¿Õ¼ä»®·Ö£¨octree / KDtree£©
+	// 2) åŸºäº Column åšç©ºé—´åˆ’åˆ†ï¼ˆoctree / KDtreeï¼‰
 	TilingStatsColumns stats;
 	CloudTilingColumns::BuildOctree(
 		myColumns,
 		myTiles,
 		stats,
-		myTilingParams);       // LeafMaxPoints / MaxDepth µÈ²ÎÊıÔÚ myTilingParams Àï
+		myTilingParams);       // LeafMaxPoints / MaxDepth ç­‰å‚æ•°åœ¨ myTilingParams é‡Œ
 
-	// 3) ÎªÃ¿¸ö Tile ¹¹½¨¸÷¼¶ LOD£¬²¢ÔÚÄÚ²¿¼ÆËãÃ¿¼¶µÄ ErrorWorld
+	// 3) ä¸ºæ¯ä¸ª Tile æ„å»ºå„çº§ LODï¼Œå¹¶åœ¨å†…éƒ¨è®¡ç®—æ¯çº§çš„ ErrorWorld
 	BuildLODsForTiles(
 		myColumns,
 		myTiles,
-		myMaxLODLevel,         // ±ÈÈç 2 »ò 3
-		2.0f);                 // Ô¤Áô³öÀ´µÄÊÀ½çÎó²î²ÎÊı
+		myMaxLODLevel,         // æ¯”å¦‚ 2 æˆ– 3
+		2.0f);                 // é¢„ç•™å‡ºæ¥çš„ä¸–ç•Œè¯¯å·®å‚æ•°
 
-	// ³õÊ¼»¯ LOD »º´æºÍ×´Ì¬
+	// åˆå§‹åŒ– LOD ç¼“å­˜å’ŒçŠ¶æ€
 	for (auto& tile : myTiles)
 	{
 		tile.LodArrays.clear();
-		tile.LodArrays.resize(tile.LODs.size()); // Óë LODs Í¬²½
-		tile.CurrentLOD = 0;     // Ä¬ÈÏÓÃ LOD0
-		tile.Visible = false;  // Ä¬ÈÏ¶¼²»¿É¼û
+		tile.LodArrays.resize(tile.LODs.size()); // ä¸ LODs åŒæ­¥
+		tile.CurrentLOD = 0;     // é»˜è®¤ç”¨ LOD0
+		tile.Visible = false;  // é»˜è®¤éƒ½ä¸å¯è§
 	}
 
-	// 4) Í¨Öª OCCT ÖØĞÂÉú³ÉÕ¹Ê¾
-	SetToUpdate();	//	´æÒÉ£¬ÓĞĞ§¹ûÂğ£¿
+	// 4) é€šçŸ¥ OCCT é‡æ–°ç”Ÿæˆå±•ç¤º
+	SetToUpdate();	//	å­˜ç–‘ï¼Œæœ‰æ•ˆæœå—ï¼Ÿ
 }
 
 void AIS_Cloud::ensureTileGArray_(
@@ -80,8 +80,8 @@ void AIS_Cloud::ensureTileGArray_(
 	const Column3f& ncol = lod.Normal;
 
 	if (!pos.IsValid()) {
-		// °Ñ¹Ø¼ü×Ö¶Î¶¼¿´Ò»ÑÛ
-		__debugbreak(); // ÔÚÕâÀïÍ£ÏÂ¿´£ºpos.X / pos.Y / pos.Z / pos.Count / pos.Indices
+		// æŠŠå…³é”®å­—æ®µéƒ½çœ‹ä¸€çœ¼
+		__debugbreak(); // åœ¨è¿™é‡Œåœä¸‹çœ‹ï¼špos.X / pos.Y / pos.Z / pos.Count / pos.Indices
 		return;
 	}
 
@@ -98,7 +98,7 @@ void AIS_Cloud::ensureTileGArray_(
 	const int* idx = pos.Indices;
 	const bool hasIdx = (idx != nullptr);
 
-	// È«¾ÖµãÊı£º´Ó CloudDataStore ÄÃ£¬¸ü¿ÉĞÅ
+	// å…¨å±€ç‚¹æ•°ï¼šä» CloudDataStore æ‹¿ï¼Œæ›´å¯ä¿¡
 	const std::size_t globalCount =
 		m_store ? m_store->Size() : pos.Count;
 
@@ -150,7 +150,7 @@ void AIS_Cloud::setAspect(Handle(Graphic3d_Group) theGroup)
 	aMarker->SetShadingModel(Graphic3d_TypeOfShadingModel_DEFAULT);
 	this->SetMaterial(Graphic3d_NOM_PLASTIC);
 
-	// ÉèÖÃµãÔÆÑùÊ½
+	// è®¾ç½®ç‚¹äº‘æ ·å¼
 	theGroup->SetGroupPrimitivesAspect(aMarker);
 }
 
@@ -160,13 +160,13 @@ AIS_Cloud::EnsureTileLODArray(ColumnTile& tile, int lodIndex)
 	if (lodIndex < 0 || lodIndex >= (int)tile.LODs.size())
 		return Handle(Graphic3d_ArrayOfPoints)();
 
-	// Óë LODs ÊıÁ¿¶ÔÆë
+	// ä¸ LODs æ•°é‡å¯¹é½
 	if (tile.LodArrays.size() != tile.LODs.size())
 		tile.LodArrays.resize(tile.LODs.size());
 
 	Handle(Graphic3d_ArrayOfPoints)& arr = tile.LodArrays[lodIndex];
 	if (!arr.IsNull())
-		return arr; // ÒÑÓĞ»º´æ
+		return arr; // å·²æœ‰ç¼“å­˜
 
 	const TileLODLevel& lod = tile.LODs[lodIndex];
 
@@ -184,7 +184,7 @@ void AIS_Cloud::Compute(const Handle(PrsMgr_PresentationManager)& thePM,
 	Handle(Graphic3d_Group) aGroup = thePrs->NewGroup();
 	setAspect(aGroup);
 
-	// ´òÓ¡¿ÉÏÔÊ¾µÄtileÊıÁ¿
+	// æ‰“å°å¯æ˜¾ç¤ºçš„tileæ•°é‡
 	int numDisplayedTiles = 0;
 	int numDisplayedPoints = 0;
 
@@ -207,11 +207,12 @@ void AIS_Cloud::Compute(const Handle(PrsMgr_PresentationManager)& thePM,
 		idx++;
 		numDisplayedPoints += arr->VertexNumber();
 
-		// ¿ÉÑ¡£ºµ÷ÊÔ´òÓ¡
+		// å¯é€‰ï¼šè°ƒè¯•æ‰“å°
 		// printPrimitive10Pts(arr);
 	}
 
-	// ¼ÇÂ¼µ½³ÉÔ±±äÁ¿£¬¹© HUD Ê¹ÓÃ
+	// è®°å½•åˆ°æˆå‘˜å˜é‡ï¼Œä¾› HUD ä½¿ç”¨
 	myLastNumDisplayedTiles = idx;
 	myLastNumDisplayedPoints = numDisplayedPoints;
+
 }
