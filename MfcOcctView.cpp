@@ -11,7 +11,7 @@
 
 #include "MfcOcctDoc.h"
 #include "MfcOcctView.h"
-#include "LOD\CloudLodController.hxx"
+#include "CloudLodController.hxx"
 #include "BRepPrimAPI_MakeBox.hxx"
 #include "SceneHud.hxx"
 
@@ -632,4 +632,5 @@ void CMfcOcctView::UpdateHud()
 	txt += hs.selectMs;
 
 	m_sceneHud->Update(txt);
+
 }
