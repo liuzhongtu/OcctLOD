@@ -15,11 +15,11 @@ struct TilingStatsColumns
 	std::size_t TotalPoints = 0;
 };
 
-// »ùÓÚ CloudColumns µÄ AoS+SoA ÊÓÍ¼£¬¹¹½¨ ColumnTile °Ë²æÊ÷/KDÊ÷ Ò¶×Ó
+// åŸºäº CloudColumns çš„ AoS+SoA è§†å›¾ï¼Œæ„å»º ColumnTile å…«å‰æ ‘/KDæ ‘ å¶å­
 class CloudTilingColumns
 {
 public:
-	// Ö±½ÓÓÃ CloudColumns£¨¶ø²»ÊÇ CloudDataStore£©
+	// ç›´æ¥ç”¨ CloudColumnsï¼ˆè€Œä¸æ˜¯ CloudDataStoreï¼‰
 	static void BuildOctree(
 		const CloudColumns& columns,
 		std::vector<ColumnTile>& outTiles,
@@ -33,7 +33,7 @@ public:
 		const TilingParams& params);
 
 private:
-	static void buildOctreeRecursive(
+	static int buildOctreeRecursive(
 		const CloudColumns& columns,
 		const std::vector<int>& inIdx,
 		const Bnd_Box& inBox,
