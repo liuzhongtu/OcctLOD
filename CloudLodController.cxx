@@ -1,7 +1,7 @@
 #include "CloudLodController.hxx"
 #include "LeafProjector.hxx"
 
-#include "..\AIS_Cloud.hxx"
+#include "AIS_Cloud.hxx"
 #include <Standard_Type.hxx>
 #include <algorithm>
 #include <unordered_set>
@@ -469,4 +469,5 @@ void CloudLodController::UpdateDisplayedStats()
 
 	m_hudStats.displayedTiles = totalTiles;
 	m_hudStats.displayedPoints = totalPoints;
+
 }
