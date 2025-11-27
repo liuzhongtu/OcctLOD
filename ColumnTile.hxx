@@ -13,13 +13,13 @@ struct TileLODLevel
 	Column3f Position;
 	Column3f Normal;
 
-	// ��ǰ LOD �Ĳ����������������ǡ�ȫ�� SoA ���项��
+	// 当前 LOD 的采样索引（索引的是「全局 SoA 数组」）
 	std::vector<int> Indices;
 
 	std::size_t PointCount = 0;
 
-	// ����ռ�����λ = ģ�͵�λ������ mm��
-	// ����Ϊ���� LOD �ܴﵽ�ĵ��ͼ��ξ��ȣ����� / ������
+	// 世界空间误差（单位 = 模型单位，比如 mm）
+	// 理解为：该 LOD 能达到的典型几何精度（点间距 / 近似误差）
 	Standard_Real ErrorWorld = 0.0f;
 
 	TileLODLevel()
@@ -50,19 +50,25 @@ struct ColumnTile
 	int     Depth = 0;
 	Bnd_Box BBox;
 
-	// �� tile �ڡ�ȫ�� SoA ���项�еĵ�������ȫ�ֱ��ʣ�
+	// -1 表示根节点，否则是其父 tile 的索引
+	int Parent = -1;
+
+	// 子 tile 索引列表, 若为空，则表示无子 tile
+	std::vector<int> Children;
+
+	// 该 tile 在「全局 SoA 数组」中的点索引（全分辨率）
 	std::vector<int> Indices;
 
-	// ���� LOD ����
+	// 所有 LOD 级别
 	std::vector<TileLODLevel> LODs;
 
-	// �� LODs ͬ���ȣ�ÿ��Ԫ�ض�Ӧĳһ�� LOD �� GPU ����
+	// 与 LODs 同长度，每个元素对应某一级 LOD 的 GPU 数组
 	std::vector<Handle(Graphic3d_ArrayOfPoints)> LodArrays;
 
-	// ��ǰʹ����һ�� LOD�������� LODs / LodArrays����-1 ��ʾ��δѡ��
+	// 当前使用哪一个 LOD（索引到 LODs / LodArrays），-1 表示还未选择
 	int CurrentLOD = -1;
 
-	// �� tile �Ƿ�������
+	// 该 tile 是否参与绘制
 	bool Visible = true;
 
 	const TileLODLevel* Level(int level) const
